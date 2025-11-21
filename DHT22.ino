@@ -9,20 +9,42 @@ const char* ssid = "SMKM-1";
 const char* password = "kupattahupadalarang";
 
 
-#define DHTPIN D3  // Digital pin connected to the DHT sensor
-#define DHTTYPE DHT22  // DHT 22 (AM2302)
+#define DHTPIN D4
+#define BUZZER D7
+#define LEDYELLOW D6
+#define LEDRED D1
+#define LEDGREEN D2
+#define LEDWHITE D3
+#define LEDYELLOW2 D8
+#define LEDRED2 D5
+#define DHTTYPE DHT22
+
+String BASE_URL = "http://192.168.100.13:8000";
+int pinLampu[6] = {D6, D1, D2, D3, D8, D5};
+
+
 DHT_Unified dht(DHTPIN, DHTTYPE);
-
-// pin buzzer
-#define BUZZER_PIN D2
-
 uint32_t delayMS;
 
 void setup() {
   Serial.begin(115200);
-  pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, LOW);
   delay(1000);
+
+  pinMode(LEDYELLOW, OUTPUT);
+  pinMode(LEDRED, OUTPUT);
+  pinMode(LEDGREEN, OUTPUT);
+  pinMode(LEDWHITE, OUTPUT);
+  pinMode(LEDYELLOW2, OUTPUT);
+  pinMode(LEDRED2, OUTPUT);
+  pinMode(BUZZER, OUTPUT);
+
+  digitalWrite(LEDYELLOW, LOW);
+  digitalWrite(LEDRED, LOW);
+  digitalWrite(LEDGREEN, LOW);
+  digitalWrite(LEDWHITE, LOW);
+  digitalWrite(LEDYELLOW2, LOW);
+  digitalWrite(LEDRED2, LOW);
+  digitalWrite(BUZZER, LOW);
 
   // koneksi ke wifi
   Serial.println();
@@ -50,7 +72,7 @@ void setup() {
 
 void loop() {
   delay(delayMS);
-
+  lampu();
   sensors_event_t event;
 
   dht.temperature().getEvent(&event);
@@ -79,7 +101,7 @@ void loop() {
     WiFiClient client;
 
     // endpoint untuk kirim data sensor
-    String urlKirim = "http://192.168.1.35:8000/update-data/";
+    String urlKirim = BASE_URL + "/update-data/";
     urlKirim += String(temperature, 1) + "/" + String(humidity, 1);
 
     Serial.print("Mengirim data ke : ");
@@ -106,11 +128,11 @@ void loop() {
 
 
   // === 2. AMBIL DATA DARI SERVER (CEK BUZZER) ===
-  if (WiFi.status() == WL_CONNECTED) {
+ /*  if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     WiFiClient client;
 
-    String urlGet = "http://192.168.1.35:8000/get-latest";
+    String urlGet = BASE_URL + "/get-latest";
     http.begin(client, urlGet);
     int httpCode = http.GET();
 
@@ -135,8 +157,54 @@ void loop() {
     }
 
     http.end();
-  }
+  } */
 
   delay(3000);
+}
+
+void lampu() {
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFiClient client;
+    HTTPClient http;
+    http.begin(client, BASE_URL + "/get-lampu");
+    int httpCode = http.GET();
+
+    if (httpCode > 0) {
+      String payload = http.getString();
+      Serial.println("Data LAMPUU dari server:");
+      Serial.println(payload);
+      StaticJsonDocument<700> doc;
+      DeserializationError error = deserializeJson(doc, payload);
+
+      if (!error){
+        for (int i = 0; i < doc.size(); i++) {
+          int id = doc[i]["id"];
+          String name = doc[i]["name"].as<String>();
+          int status = doc[i]["status"];
+          
+          // ubah lampu 1->index 0
+          int index = id - 1;
+
+          int pinLampu[6] = {D6, D1, D2, D3, D8, D5};
+
+          // kontrol LED 
+          if (index >= 0 && index < 6) {
+            digitalWrite(pinLampu[index], status);
+
+            Serial.print("name : ");
+            Serial.print(name);
+            Serial.print(" = ");
+            
+            Serial.println(status);
+          }
+        }
+      }
+      
+    } else {
+      Serial.printf("Gagal ambil LAMPU: %s\n", http.errorToString(httpCode).c_str());
+    }
+
+    http.end();
+  }
 }
 
